@@ -10,6 +10,8 @@ in the LICENSE file in the root directory of this source tree.
 {{ template "header" $ }}
 
 import (
+	"sync"
+
 	{{- range $n := $.Nodes }}
 		"{{ $.Config.Package }}/{{ $n.Package }}"
 	{{- end }}
@@ -57,6 +59,9 @@ type {{ $mutation }} struct {
 			removed{{ $e.BuilderField }} map[{{ $e.Type.ID.Type }}]struct{}
 		{{- end }}
 	{{- end }}
+	// lazy load old fields.
+	oldOnce sync.Once
+	oldValue  *{{ $n.Name }}
 }
 
 var _ ent.Mutation = (*{{ $mutation }})(nil)
@@ -127,6 +132,22 @@ func (m *{{ $mutation }}) ID() (id {{ $n.ID.Type }}, exists bool) {
 			return
 		}
 		return *v, true
+	}
+
+	// {{ $f.MutationGetOld }} returns the old {{ $f.Name }} value in the database, if exists.
+	// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+	func (m *{{ $mutation }}) {{ $f.MutationGetOld }}(ctx context.Context) (v {{ if $f.Nillable }}*{{ end }}{{ $f.Type }}, err error) {
+		if !m.op.Is(OpUpdateOne) {
+			return v, fmt.Errorf("{{ $f.MutationGetOld }} is allowed only on UpdateOne operations")
+		}
+		if m.{{ $n.ID.BuilderField }} == nil {
+			return v, fmt.Errorf("{{ $f.MutationGetOld }} requires an ID field in the mutation")
+		}
+		old, err := m.old(ctx, *m.{{ $n.ID.BuilderField }})
+		if err != nil {
+			return v, fmt.Errorf("querying old value for {{ $f.MutationGetOld }}: %w", err)
+		}
+		return old.{{ $f.StructField }}, nil
 	}
 
 	{{ if and $f.Type.Numeric }}
@@ -314,6 +335,21 @@ func (m *{{ $mutation }}) Field(name string) (ent.Value, bool) {
 	{{- end }}
 	}
 	return nil, false
+}
+
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *{{ $mutation }}) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	{{- range $f := $n.Fields }}
+		{{- $const := print $n.Package "." $f.Constant }}
+		case {{ $const }}:
+			return  m.{{ $f.MutationGetOld }}(ctx)
+	{{- end }}
+	}
+	return nil, fmt.Errorf("unknown {{ $n.Name }} field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -585,6 +621,15 @@ func (m *{{ $mutation }}) ResetEdge(name string) error {
 	{{- end }}
 	}
 	return fmt.Errorf("unknown {{ $n.Name }} edge %s", name)
+}
+
+// old returns the old {{ $n.Name }} from the database.
+func (m *{{ $mutation }}) old(ctx context.Context, id {{ $n.ID.Type }}) (*{{ $n.Name }}, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().{{ $n.Name }}.Get(ctx, id)
+	})
+	return m.oldValue, err
 }
 {{ end }}
 

@@ -626,6 +626,15 @@ func (f Field) MutationGet() string {
 	return name
 }
 
+// MutationGetOld returns the method name for getting the old value of a field.
+func (f Field) MutationGetOld() string {
+	name := "Old" + pascal(f.Name)
+	if _, ok := mutMethods[name]; ok {
+		name = "Get" + name
+	}
+	return name
+}
+
 // MutationReset returns the method name for resetting the field value.
 // The default name is "Reset<FieldName>". If the the method conflicts
 // with the mutation methods, suffix the method with "Field".

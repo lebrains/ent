@@ -7,7 +7,9 @@
 package ent
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"github.com/facebookincubator/ent/examples/edgeindex/ent/city"
 	"github.com/facebookincubator/ent/examples/edgeindex/ent/street"
@@ -39,6 +41,9 @@ type CityMutation struct {
 	clearedFields  map[string]struct{}
 	streets        map[int]struct{}
 	removedstreets map[int]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *City
 }
 
 var _ ent.Mutation = (*CityMutation)(nil)
@@ -93,6 +98,22 @@ func (m *CityMutation) Name() (r string, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldName returns the old name value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *CityMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldName is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldName requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return old.Name, nil
 }
 
 // ResetName reset all changes of the "name" field.
@@ -172,6 +193,17 @@ func (m *CityMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *CityMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case city.FieldName:
+		return m.OldName(ctx)
+	}
+	return nil, fmt.Errorf("unknown City field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -326,6 +358,15 @@ func (m *CityMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown City edge %s", name)
 }
 
+// old returns the old City from the database.
+func (m *CityMutation) old(ctx context.Context, id int) (*City, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().City.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // StreetMutation represents an operation that mutate the Streets
 // nodes in the graph.
 type StreetMutation struct {
@@ -337,6 +378,9 @@ type StreetMutation struct {
 	clearedFields map[string]struct{}
 	city          *int
 	clearedcity   bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Street
 }
 
 var _ ent.Mutation = (*StreetMutation)(nil)
@@ -391,6 +435,22 @@ func (m *StreetMutation) Name() (r string, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldName returns the old name value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *StreetMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldName is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldName requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return old.Name, nil
 }
 
 // ResetName reset all changes of the "name" field.
@@ -467,6 +527,17 @@ func (m *StreetMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *StreetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case street.FieldName:
+		return m.OldName(ctx)
+	}
+	return nil, fmt.Errorf("unknown Street field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -616,4 +687,13 @@ func (m *StreetMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Street edge %s", name)
+}
+
+// old returns the old Street from the database.
+func (m *StreetMutation) old(ctx context.Context, id int) (*Street, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Street.Get(ctx, id)
+	})
+	return m.oldValue, err
 }

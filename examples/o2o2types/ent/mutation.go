@@ -7,7 +7,9 @@
 package ent
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/facebookincubator/ent/examples/o2o2types/ent/card"
@@ -41,6 +43,9 @@ type CardMutation struct {
 	clearedFields map[string]struct{}
 	owner         *int
 	clearedowner  bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Card
 }
 
 var _ ent.Mutation = (*CardMutation)(nil)
@@ -97,6 +102,22 @@ func (m *CardMutation) Expired() (r time.Time, exists bool) {
 	return *v, true
 }
 
+// OldExpired returns the old expired value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *CardMutation) OldExpired(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldExpired is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldExpired requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpired: %w", err)
+	}
+	return old.Expired, nil
+}
+
 // ResetExpired reset all changes of the "expired" field.
 func (m *CardMutation) ResetExpired() {
 	m.expired = nil
@@ -114,6 +135,22 @@ func (m *CardMutation) Number() (r string, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldNumber returns the old number value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *CardMutation) OldNumber(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldNumber is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldNumber requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNumber: %w", err)
+	}
+	return old.Number, nil
 }
 
 // ResetNumber reset all changes of the "number" field.
@@ -195,6 +232,19 @@ func (m *CardMutation) Field(name string) (ent.Value, bool) {
 		return m.Number()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *CardMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case card.FieldExpired:
+		return m.OldExpired(ctx)
+	case card.FieldNumber:
+		return m.OldNumber(ctx)
+	}
+	return nil, fmt.Errorf("unknown Card field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -356,6 +406,15 @@ func (m *CardMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Card edge %s", name)
 }
 
+// old returns the old Card from the database.
+func (m *CardMutation) old(ctx context.Context, id int) (*Card, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Card.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // UserMutation represents an operation that mutate the Users
 // nodes in the graph.
 type UserMutation struct {
@@ -369,6 +428,9 @@ type UserMutation struct {
 	clearedFields map[string]struct{}
 	card          *int
 	clearedcard   bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -426,6 +488,22 @@ func (m *UserMutation) Age() (r int, exists bool) {
 	return *v, true
 }
 
+// OldAge returns the old age value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldAge(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldAge is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldAge requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAge: %w", err)
+	}
+	return old.Age, nil
+}
+
 // AddAge adds i to age.
 func (m *UserMutation) AddAge(i int) {
 	if m.addage != nil {
@@ -462,6 +540,22 @@ func (m *UserMutation) Name() (r string, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldName returns the old name value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldName is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldName requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return old.Name, nil
 }
 
 // ResetName reset all changes of the "name" field.
@@ -543,6 +637,19 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case user.FieldAge:
+		return m.OldAge(ctx)
+	case user.FieldName:
+		return m.OldName(ctx)
+	}
+	return nil, fmt.Errorf("unknown User field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -717,4 +824,13 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)
+}
+
+// old returns the old User from the database.
+func (m *UserMutation) old(ctx context.Context, id int) (*User, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().User.Get(ctx, id)
+	})
+	return m.oldValue, err
 }

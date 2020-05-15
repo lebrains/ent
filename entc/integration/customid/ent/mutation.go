@@ -7,7 +7,9 @@
 package ent
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"github.com/facebookincubator/ent/entc/integration/customid/ent/blob"
 	"github.com/facebookincubator/ent/entc/integration/customid/ent/car"
@@ -48,6 +50,9 @@ type BlobMutation struct {
 	clearedparent bool
 	links         map[uuid.UUID]struct{}
 	removedlinks  map[uuid.UUID]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Blob
 }
 
 var _ ent.Mutation = (*BlobMutation)(nil)
@@ -108,6 +113,22 @@ func (m *BlobMutation) UUID() (r uuid.UUID, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldUUID returns the old uuid value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *BlobMutation) OldUUID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldUUID is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldUUID requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUUID: %w", err)
+	}
+	return old.UUID, nil
 }
 
 // ResetUUID reset all changes of the "uuid" field.
@@ -226,6 +247,17 @@ func (m *BlobMutation) Field(name string) (ent.Value, bool) {
 		return m.UUID()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *BlobMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case blob.FieldUUID:
+		return m.OldUUID(ctx)
+	}
+	return nil, fmt.Errorf("unknown Blob field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -398,6 +430,15 @@ func (m *BlobMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Blob edge %s", name)
 }
 
+// old returns the old Blob from the database.
+func (m *BlobMutation) old(ctx context.Context, id uuid.UUID) (*Blob, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Blob.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // CarMutation represents an operation that mutate the Cars
 // nodes in the graph.
 type CarMutation struct {
@@ -409,6 +450,9 @@ type CarMutation struct {
 	clearedFields map[string]struct{}
 	owner         *string
 	clearedowner  bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Car
 }
 
 var _ ent.Mutation = (*CarMutation)(nil)
@@ -463,6 +507,22 @@ func (m *CarMutation) Model() (r string, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldModel returns the old model value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *CarMutation) OldModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldModel is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldModel requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModel: %w", err)
+	}
+	return old.Model, nil
 }
 
 // ResetModel reset all changes of the "model" field.
@@ -539,6 +599,17 @@ func (m *CarMutation) Field(name string) (ent.Value, bool) {
 		return m.Model()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *CarMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case car.FieldModel:
+		return m.OldModel(ctx)
+	}
+	return nil, fmt.Errorf("unknown Car field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -690,6 +761,15 @@ func (m *CarMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Car edge %s", name)
 }
 
+// old returns the old Car from the database.
+func (m *CarMutation) old(ctx context.Context, id int) (*Car, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Car.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // GroupMutation represents an operation that mutate the Groups
 // nodes in the graph.
 type GroupMutation struct {
@@ -700,6 +780,9 @@ type GroupMutation struct {
 	clearedFields map[string]struct{}
 	users         map[int]struct{}
 	removedusers  map[int]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Group
 }
 
 var _ ent.Mutation = (*GroupMutation)(nil)
@@ -815,6 +898,15 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	}
+	return nil, fmt.Errorf("unknown Group field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -959,6 +1051,15 @@ func (m *GroupMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Group edge %s", name)
 }
 
+// old returns the old Group from the database.
+func (m *GroupMutation) old(ctx context.Context, id int) (*Group, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Group.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // PetMutation represents an operation that mutate the Pets
 // nodes in the graph.
 type PetMutation struct {
@@ -975,6 +1076,9 @@ type PetMutation struct {
 	removedfriends     map[string]struct{}
 	best_friend        *string
 	clearedbest_friend bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Pet
 }
 
 var _ ent.Mutation = (*PetMutation)(nil)
@@ -1212,6 +1316,15 @@ func (m *PetMutation) Field(name string) (ent.Value, bool) {
 	return nil, false
 }
 
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *PetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	}
+	return nil, fmt.Errorf("unknown Pet field %s", name)
+}
+
 // SetField sets the value for the given name. It returns an
 // error if the field is not defined in the schema, or if the
 // type mismatch the field type.
@@ -1411,6 +1524,15 @@ func (m *PetMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Pet edge %s", name)
 }
 
+// old returns the old Pet from the database.
+func (m *PetMutation) old(ctx context.Context, id string) (*Pet, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Pet.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // UserMutation represents an operation that mutate the Users
 // nodes in the graph.
 type UserMutation struct {
@@ -1427,6 +1549,9 @@ type UserMutation struct {
 	removedchildren map[int]struct{}
 	pets            map[string]struct{}
 	removedpets     map[string]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -1667,6 +1792,15 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 	return nil, false
 }
 
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	}
+	return nil, fmt.Errorf("unknown User field %s", name)
+}
+
 // SetField sets the value for the given name. It returns an
 // error if the field is not defined in the schema, or if the
 // type mismatch the field type.
@@ -1867,4 +2001,13 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)
+}
+
+// old returns the old User from the database.
+func (m *UserMutation) old(ctx context.Context, id int) (*User, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().User.Get(ctx, id)
+	})
+	return m.oldValue, err
 }

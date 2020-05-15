@@ -7,7 +7,9 @@
 package ent
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"github.com/facebookincubator/ent/entc/integration/privacy/ent/galaxy"
 	"github.com/facebookincubator/ent/entc/integration/privacy/ent/planet"
@@ -40,6 +42,9 @@ type GalaxyMutation struct {
 	clearedFields  map[string]struct{}
 	planets        map[int]struct{}
 	removedplanets map[int]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Galaxy
 }
 
 var _ ent.Mutation = (*GalaxyMutation)(nil)
@@ -96,6 +101,22 @@ func (m *GalaxyMutation) Name() (r string, exists bool) {
 	return *v, true
 }
 
+// OldName returns the old name value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *GalaxyMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldName is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldName requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return old.Name, nil
+}
+
 // ResetName reset all changes of the "name" field.
 func (m *GalaxyMutation) ResetName() {
 	m.name = nil
@@ -113,6 +134,22 @@ func (m *GalaxyMutation) GetType() (r galaxy.Type, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldType returns the old type value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *GalaxyMutation) OldType(ctx context.Context) (v galaxy.Type, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldType is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldType requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldType: %w", err)
+	}
+	return old.Type, nil
 }
 
 // ResetType reset all changes of the "type" field.
@@ -197,6 +234,19 @@ func (m *GalaxyMutation) Field(name string) (ent.Value, bool) {
 		return m.GetType()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *GalaxyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case galaxy.FieldName:
+		return m.OldName(ctx)
+	case galaxy.FieldType:
+		return m.OldType(ctx)
+	}
+	return nil, fmt.Errorf("unknown Galaxy field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -361,6 +411,15 @@ func (m *GalaxyMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Galaxy edge %s", name)
 }
 
+// old returns the old Galaxy from the database.
+func (m *GalaxyMutation) old(ctx context.Context, id int) (*Galaxy, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Galaxy.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // PlanetMutation represents an operation that mutate the Planets
 // nodes in the graph.
 type PlanetMutation struct {
@@ -374,6 +433,9 @@ type PlanetMutation struct {
 	clearedFields    map[string]struct{}
 	neighbors        map[int]struct{}
 	removedneighbors map[int]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Planet
 }
 
 var _ ent.Mutation = (*PlanetMutation)(nil)
@@ -430,6 +492,22 @@ func (m *PlanetMutation) Name() (r string, exists bool) {
 	return *v, true
 }
 
+// OldName returns the old name value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *PlanetMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldName is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldName requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return old.Name, nil
+}
+
 // ResetName reset all changes of the "name" field.
 func (m *PlanetMutation) ResetName() {
 	m.name = nil
@@ -448,6 +526,22 @@ func (m *PlanetMutation) Age() (r uint, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldAge returns the old age value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *PlanetMutation) OldAge(ctx context.Context) (v uint, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldAge is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldAge requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAge: %w", err)
+	}
+	return old.Age, nil
 }
 
 // AddAge adds u to age.
@@ -565,6 +659,19 @@ func (m *PlanetMutation) Field(name string) (ent.Value, bool) {
 		return m.Age()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *PlanetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case planet.FieldName:
+		return m.OldName(ctx)
+	case planet.FieldAge:
+		return m.OldAge(ctx)
+	}
+	return nil, fmt.Errorf("unknown Planet field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -751,4 +858,13 @@ func (m *PlanetMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Planet edge %s", name)
+}
+
+// old returns the old Planet from the database.
+func (m *PlanetMutation) old(ctx context.Context, id int) (*Planet, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Planet.Get(ctx, id)
+	})
+	return m.oldValue, err
 }

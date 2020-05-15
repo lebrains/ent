@@ -7,7 +7,9 @@
 package ent
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"github.com/facebookincubator/ent/examples/o2orecur/ent/node"
 
@@ -40,6 +42,9 @@ type NodeMutation struct {
 	clearedprev   bool
 	next          *int
 	clearednext   bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Node
 }
 
 var _ ent.Mutation = (*NodeMutation)(nil)
@@ -95,6 +100,22 @@ func (m *NodeMutation) Value() (r int, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldValue returns the old value value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *NodeMutation) OldValue(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldValue is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldValue requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValue: %w", err)
+	}
+	return old.Value, nil
 }
 
 // AddValue adds i to value.
@@ -229,6 +250,17 @@ func (m *NodeMutation) Field(name string) (ent.Value, bool) {
 		return m.Value()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *NodeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case node.FieldValue:
+		return m.OldValue(ctx)
+	}
+	return nil, fmt.Errorf("unknown Node field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -411,4 +443,13 @@ func (m *NodeMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Node edge %s", name)
+}
+
+// old returns the old Node from the database.
+func (m *NodeMutation) old(ctx context.Context, id int) (*Node, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Node.Get(ctx, id)
+	})
+	return m.oldValue, err
 }

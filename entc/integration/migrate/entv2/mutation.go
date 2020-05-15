@@ -7,7 +7,9 @@
 package entv2
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"github.com/facebookincubator/ent/entc/integration/migrate/entv2/car"
 	"github.com/facebookincubator/ent/entc/integration/migrate/entv2/user"
@@ -40,6 +42,9 @@ type CarMutation struct {
 	clearedFields map[string]struct{}
 	owner         *int
 	clearedowner  bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Car
 }
 
 var _ ent.Mutation = (*CarMutation)(nil)
@@ -146,6 +151,15 @@ func (m *CarMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *CarMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	}
+	return nil, fmt.Errorf("unknown Car field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -287,6 +301,15 @@ func (m *CarMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Car edge %s", name)
 }
 
+// old returns the old Car from the database.
+func (m *CarMutation) old(ctx context.Context, id int) (*Car, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Car.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // GroupMutation represents an operation that mutate the Groups
 // nodes in the graph.
 type GroupMutation struct {
@@ -295,6 +318,9 @@ type GroupMutation struct {
 	typ           string
 	id            *int
 	clearedFields map[string]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Group
 }
 
 var _ ent.Mutation = (*GroupMutation)(nil)
@@ -362,6 +388,15 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	}
+	return nil, fmt.Errorf("unknown Group field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -483,6 +518,15 @@ func (m *GroupMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Group edge %s", name)
 }
 
+// old returns the old Group from the database.
+func (m *GroupMutation) old(ctx context.Context, id int) (*Group, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Group.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // PetMutation represents an operation that mutate the Pets
 // nodes in the graph.
 type PetMutation struct {
@@ -491,6 +535,9 @@ type PetMutation struct {
 	typ           string
 	id            *int
 	clearedFields map[string]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Pet
 }
 
 var _ ent.Mutation = (*PetMutation)(nil)
@@ -558,6 +605,15 @@ func (m *PetMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *PetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	}
+	return nil, fmt.Errorf("unknown Pet field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -679,6 +735,15 @@ func (m *PetMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Pet edge %s", name)
 }
 
+// old returns the old Pet from the database.
+func (m *PetMutation) old(ctx context.Context, id int) (*Pet, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Pet.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // UserMutation represents an operation that mutate the Users
 // nodes in the graph.
 type UserMutation struct {
@@ -701,6 +766,9 @@ type UserMutation struct {
 	removedcar    map[int]struct{}
 	pets          *int
 	clearedpets   bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -764,6 +832,22 @@ func (m *UserMutation) Age() (r int, exists bool) {
 	return *v, true
 }
 
+// OldAge returns the old age value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldAge(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldAge is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldAge requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAge: %w", err)
+	}
+	return old.Age, nil
+}
+
 // AddAge adds i to age.
 func (m *UserMutation) AddAge(i int) {
 	if m.addage != nil {
@@ -802,6 +886,22 @@ func (m *UserMutation) Name() (r string, exists bool) {
 	return *v, true
 }
 
+// OldName returns the old name value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldName is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldName requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return old.Name, nil
+}
+
 // ResetName reset all changes of the "name" field.
 func (m *UserMutation) ResetName() {
 	m.name = nil
@@ -819,6 +919,22 @@ func (m *UserMutation) Nickname() (r string, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldNickname returns the old nickname value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldNickname(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldNickname is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldNickname requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNickname: %w", err)
+	}
+	return old.Nickname, nil
 }
 
 // ResetNickname reset all changes of the "nickname" field.
@@ -840,6 +956,22 @@ func (m *UserMutation) Phone() (r string, exists bool) {
 	return *v, true
 }
 
+// OldPhone returns the old phone value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldPhone(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldPhone is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldPhone requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPhone: %w", err)
+	}
+	return old.Phone, nil
+}
+
 // ResetPhone reset all changes of the "phone" field.
 func (m *UserMutation) ResetPhone() {
 	m.phone = nil
@@ -857,6 +989,22 @@ func (m *UserMutation) Buffer() (r []byte, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldBuffer returns the old buffer value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldBuffer(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldBuffer is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldBuffer requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBuffer: %w", err)
+	}
+	return old.Buffer, nil
 }
 
 // ClearBuffer clears the value of buffer.
@@ -891,6 +1039,22 @@ func (m *UserMutation) Title() (r string, exists bool) {
 	return *v, true
 }
 
+// OldTitle returns the old title value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldTitle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldTitle is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldTitle requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
+	}
+	return old.Title, nil
+}
+
 // ResetTitle reset all changes of the "title" field.
 func (m *UserMutation) ResetTitle() {
 	m.title = nil
@@ -908,6 +1072,22 @@ func (m *UserMutation) NewName() (r string, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldNewName returns the old new_name value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldNewName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldNewName is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldNewName requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNewName: %w", err)
+	}
+	return old.NewName, nil
 }
 
 // ClearNewName clears the value of new_name.
@@ -942,6 +1122,22 @@ func (m *UserMutation) Blob() (r []byte, exists bool) {
 	return *v, true
 }
 
+// OldBlob returns the old blob value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldBlob(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldBlob is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldBlob requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBlob: %w", err)
+	}
+	return old.Blob, nil
+}
+
 // ClearBlob clears the value of blob.
 func (m *UserMutation) ClearBlob() {
 	m.blob = nil
@@ -972,6 +1168,22 @@ func (m *UserMutation) State() (r user.State, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldState returns the old state value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldState(ctx context.Context) (v user.State, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldState is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldState requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return old.State, nil
 }
 
 // ClearState clears the value of state.
@@ -1143,6 +1355,33 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.State()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case user.FieldAge:
+		return m.OldAge(ctx)
+	case user.FieldName:
+		return m.OldName(ctx)
+	case user.FieldNickname:
+		return m.OldNickname(ctx)
+	case user.FieldPhone:
+		return m.OldPhone(ctx)
+	case user.FieldBuffer:
+		return m.OldBuffer(ctx)
+	case user.FieldTitle:
+		return m.OldTitle(ctx)
+	case user.FieldNewName:
+		return m.OldNewName(ctx)
+	case user.FieldBlob:
+		return m.OldBlob(ctx)
+	case user.FieldState:
+		return m.OldState(ctx)
+	}
+	return nil, fmt.Errorf("unknown User field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -1435,4 +1674,13 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)
+}
+
+// old returns the old User from the database.
+func (m *UserMutation) old(ctx context.Context, id int) (*User, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().User.Get(ctx, id)
+	})
+	return m.oldValue, err
 }

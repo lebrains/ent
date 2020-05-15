@@ -7,7 +7,9 @@
 package ent
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/facebookincubator/ent/entc/integration/template/ent/group"
@@ -41,6 +43,9 @@ type GroupMutation struct {
 	max_users     *int
 	addmax_users  *int
 	clearedFields map[string]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Group
 }
 
 var _ ent.Mutation = (*GroupMutation)(nil)
@@ -98,6 +103,22 @@ func (m *GroupMutation) MaxUsers() (r int, exists bool) {
 	return *v, true
 }
 
+// OldMaxUsers returns the old max_users value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *GroupMutation) OldMaxUsers(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldMaxUsers is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldMaxUsers requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaxUsers: %w", err)
+	}
+	return old.MaxUsers, nil
+}
+
 // AddMaxUsers adds i to max_users.
 func (m *GroupMutation) AddMaxUsers(i int) {
 	if m.addmax_users != nil {
@@ -152,6 +173,17 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.MaxUsers()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case group.FieldMaxUsers:
+		return m.OldMaxUsers(ctx)
+	}
+	return nil, fmt.Errorf("unknown Group field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -298,6 +330,15 @@ func (m *GroupMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Group edge %s", name)
 }
 
+// old returns the old Group from the database.
+func (m *GroupMutation) old(ctx context.Context, id int) (*Group, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Group.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // PetMutation represents an operation that mutate the Pets
 // nodes in the graph.
 type PetMutation struct {
@@ -311,6 +352,9 @@ type PetMutation struct {
 	clearedFields map[string]struct{}
 	owner         *int
 	clearedowner  bool
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *Pet
 }
 
 var _ ent.Mutation = (*PetMutation)(nil)
@@ -368,6 +412,22 @@ func (m *PetMutation) Age() (r int, exists bool) {
 	return *v, true
 }
 
+// OldAge returns the old age value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *PetMutation) OldAge(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldAge is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldAge requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAge: %w", err)
+	}
+	return old.Age, nil
+}
+
 // AddAge adds i to age.
 func (m *PetMutation) AddAge(i int) {
 	if m.addage != nil {
@@ -404,6 +464,22 @@ func (m *PetMutation) LicensedAt() (r time.Time, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldLicensedAt returns the old licensed_at value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *PetMutation) OldLicensedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldLicensedAt is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldLicensedAt requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLicensedAt: %w", err)
+	}
+	return old.LicensedAt, nil
 }
 
 // ClearLicensedAt clears the value of licensed_at.
@@ -498,6 +574,19 @@ func (m *PetMutation) Field(name string) (ent.Value, bool) {
 		return m.LicensedAt()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *PetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case pet.FieldAge:
+		return m.OldAge(ctx)
+	case pet.FieldLicensedAt:
+		return m.OldLicensedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown Pet field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -683,6 +772,15 @@ func (m *PetMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Pet edge %s", name)
 }
 
+// old returns the old Pet from the database.
+func (m *PetMutation) old(ctx context.Context, id int) (*Pet, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().Pet.Get(ctx, id)
+	})
+	return m.oldValue, err
+}
+
 // UserMutation represents an operation that mutate the Users
 // nodes in the graph.
 type UserMutation struct {
@@ -696,6 +794,9 @@ type UserMutation struct {
 	removedpets    map[int]struct{}
 	friends        map[int]struct{}
 	removedfriends map[int]struct{}
+	// lazy load old fields.
+	oldOnce  sync.Once
+	oldValue *User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -750,6 +851,22 @@ func (m *UserMutation) Name() (r string, exists bool) {
 		return
 	}
 	return *v, true
+}
+
+// OldName returns the old name value in the database, if exists.
+// An error is returned if the mutation operation is not UpdateOne, or database query fails.
+func (m *UserMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, fmt.Errorf("OldName is allowed only on UpdateOne operations")
+	}
+	if m.id == nil {
+		return v, fmt.Errorf("OldName requires an ID field in the mutation")
+	}
+	old, err := m.old(ctx, *m.id)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return old.Name, nil
 }
 
 // ResetName reset all changes of the "name" field.
@@ -871,6 +988,17 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	}
 	return nil, false
+}
+
+// OldField returns the old value of the field from the database.
+// An error is returned if the mutation operation is not UpdateOne,
+// or the query to the database was failed.
+func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case user.FieldName:
+		return m.OldName(ctx)
+	}
+	return nil, fmt.Errorf("unknown User field %s", name)
 }
 
 // SetField sets the value for the given name. It returns an
@@ -1044,4 +1172,13 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)
+}
+
+// old returns the old User from the database.
+func (m *UserMutation) old(ctx context.Context, id int) (*User, error) {
+	var err error
+	m.oldOnce.Do(func() {
+		m.oldValue, err = m.Client().User.Get(ctx, id)
+	})
+	return m.oldValue, err
 }
