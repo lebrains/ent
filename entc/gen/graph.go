@@ -140,6 +140,13 @@ func (g *Graph) addEdges(schema *load.Schema) {
 	for _, e := range schema.Edges {
 		typ, ok := g.typ(e.Type)
 		expect(ok, "type %q does not exist for edge", e.Type)
+
+		var relColumns []string
+
+		if e.StorageKey != "" {
+			relColumns = append(relColumns, e.StorageKey)
+		}
+
 		switch {
 		// Assoc only.
 		case !e.Inverse:
@@ -162,12 +169,16 @@ func (g *Graph) addEdges(schema *load.Schema) {
 				Unique:    e.Unique,
 				Optional:  !e.Required,
 				StructTag: e.Tag,
+				Rel:       Relation{Columns: relColumns},
 			})
 		// Inverse and assoc.
 		case e.Inverse:
 			ref := e.Ref
 			expect(e.RefName == "", "reference name is derived from the assoc name: %s.%s <-> %s.%s", t.Name, ref.Name, t.Name, e.Name)
 			expect(ref.Type == t.Name, "assoc-inverse edge allowed only as o2o relation of the same type")
+			if ref.StorageKey != "" {
+				relColumns = append(relColumns, ref.StorageKey)
+			}
 			t.Edges = append(t.Edges, &Edge{
 				Type:      typ,
 				Name:      e.Name,
@@ -176,6 +187,7 @@ func (g *Graph) addEdges(schema *load.Schema) {
 				Unique:    e.Unique,
 				Optional:  !e.Required,
 				StructTag: e.Tag,
+				Rel:       Relation{Columns: relColumns},
 			}, &Edge{
 				Type:      typ,
 				Owner:     t,
@@ -183,6 +195,7 @@ func (g *Graph) addEdges(schema *load.Schema) {
 				Unique:    ref.Unique,
 				Optional:  !ref.Required,
 				StructTag: ref.Tag,
+				Rel:       Relation{Columns: relColumns},
 			})
 		default:
 			panic(graphError{"edge must be either an assoc or inverse edge"})
@@ -252,13 +265,22 @@ func resolve(t *Type) error {
 				if c1 == c2 {
 					c2 = rules.Singularize(e.Name) + "_id"
 				}
-				e.Rel.Columns = []string{c1, c2}
-				ref.Rel.Columns = []string{c1, c2}
+				if len(e.Rel.Columns) != 2 {
+					e.Rel.Columns = []string{c1, c2}
+					ref.Rel.Columns = []string{c1, c2}
+				} else {
+					ref.Rel.Columns = []string{e.Rel.Columns[0], e.Rel.Columns[1]}
+				}
 			}
 			e.Rel.Table, ref.Rel.Table = table, table
 			if !e.M2M() {
-				e.Rel.Columns = []string{column}
-				ref.Rel.Columns = []string{column}
+				if len(e.Rel.Columns) < 1 {
+					e.Rel.Columns = []string{column}
+					ref.Rel.Columns = []string{column}
+				} else {
+					e.Rel.Columns = []string{e.Rel.Columns[0]}
+					ref.Rel.Columns = []string{e.Rel.Columns[0]}
+				}
 			}
 		// Assoc with uninitialized relation.
 		case !e.IsInverse() && e.Rel.Type == Unk:
@@ -267,7 +289,11 @@ func resolve(t *Type) error {
 				e.Rel.Type = M2M
 				e.Bidi = true
 				e.Rel.Table = t.Label() + "_" + e.Name
-				e.Rel.Columns = []string{e.Owner.Label() + "_id", rules.Singularize(e.Name) + "_id"}
+				if len(e.Rel.Columns) == 0 {
+					e.Rel.Columns = []string{e.Owner.Label() + "_id", rules.Singularize(e.Name) + "_id"}
+				} else if len(e.Rel.Columns) == 1 {
+					e.Rel.Columns = []string{e.Rel.Columns[0], rules.Singularize(e.Name) + "_id"}
+				}
 			case e.Unique && e.Type == t:
 				e.Rel.Type = O2O
 				e.Bidi = true
@@ -280,7 +306,11 @@ func resolve(t *Type) error {
 				e.Rel.Table = e.Type.Table()
 			}
 			if !e.M2M() {
-				e.Rel.Columns = []string{fmt.Sprintf("%s_%s", t.Label(), snake(e.Name))}
+				if len(e.Rel.Columns) == 0 {
+					e.Rel.Columns = []string{fmt.Sprintf("%s_%s", t.Label(), snake(e.Name))}
+				} else if len(e.Rel.Columns) == 2 {
+					e.Rel.Columns = []string{e.Rel.Columns[0]}
+				}
 			}
 		}
 	}

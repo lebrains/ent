@@ -10,14 +10,15 @@ import (
 
 // A Descriptor for edge configuration.
 type Descriptor struct {
-	Tag      string      // struct tag.
-	Type     string      // edge type.
-	Name     string      // edge name.
-	RefName  string      // ref name; inverse only.
-	Ref      *Descriptor // edge reference; to/from of the same type.
-	Unique   bool        // unique edge.
-	Inverse  bool        // inverse edge.
-	Required bool        // required on creation.
+	Tag        string      // struct tag.
+	Type       string      // edge type.
+	Name       string      // edge name.
+	RefName    string      // ref name; inverse only.
+	Ref        *Descriptor // edge reference; to/from of the same type.
+	Unique     bool        // unique edge.
+	Inverse    bool        // inverse edge.
+	Required   bool        // required on creation.
+	StorageKey string      // columns name for foreign key
 }
 
 // To defines an association edge between two vertices.
@@ -59,6 +60,12 @@ func (b *assocBuilder) Required() *assocBuilder {
 // StructTag sets the struct tag of the assoc edge.
 func (b *assocBuilder) StructTag(s string) *assocBuilder {
 	b.desc.Tag = s
+	return b
+}
+
+// StorageKey sets the column name of the edge.
+func (b *assocBuilder) StorageKey(key string) *assocBuilder {
+	b.desc.StorageKey = key
 	return b
 }
 
@@ -105,6 +112,12 @@ func (b *inverseBuilder) Required() *inverseBuilder {
 // StructTag sets the struct tag of the inverse edge.
 func (b *inverseBuilder) StructTag(s string) *inverseBuilder {
 	b.desc.Tag = s
+	return b
+}
+
+// StorageKey sets the column name of the edge.
+func (b *inverseBuilder) StorageKey(key string) *inverseBuilder {
+	b.desc.StorageKey = key
 	return b
 }
 
